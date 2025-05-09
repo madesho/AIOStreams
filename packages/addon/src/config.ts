@@ -383,6 +383,16 @@ export function validateConfig(
     );
   }
 
+  if (
+    config.mediaFlowConfig?.mediaFlowEnabled &&
+    config.stremThruConfig?.stremThruEnabled
+  ) {
+    return createResponse(
+      false,
+      'multipleProxyServices',
+      'Multiple proxy services are not allowed'
+    );
+  }
   if (config.mediaFlowConfig?.mediaFlowEnabled) {
     if (!config.mediaFlowConfig.proxyUrl) {
       return createResponse(
@@ -399,6 +409,24 @@ export function validateConfig(
       );
     }
   }
+
+  if (config.stremThruConfig?.stremThruEnabled) {
+    if (!config.stremThruConfig.url) {
+      return createResponse(
+        false,
+        'missingUrl',
+        'URL is required if Stremthru is enabled'
+      );
+    }
+    if (!config.stremThruConfig.credential) {
+      return createResponse(
+        false,
+        'missingCredential',
+        'Credential is required if StremThru is enabled'
+      );
+    }
+  }
+
   if (
     (config.excludeFilters?.length ?? 0) > Settings.MAX_KEYWORD_FILTERS ||
     (config.strictIncludeFilters?.length ?? 0) > Settings.MAX_KEYWORD_FILTERS
@@ -439,7 +467,7 @@ export function validateConfig(
         'Regex filtering requires an API key to be set'
       );
     }
-    
+
     if (config.regexFilters.excludePattern) {
       try {
         new RegExp(config.regexFilters.excludePattern);
@@ -451,7 +479,7 @@ export function validateConfig(
         );
       }
     }
-    
+
     if (config.regexFilters.includePattern) {
       try {
         new RegExp(config.regexFilters.includePattern);
@@ -465,5 +493,45 @@ export function validateConfig(
     }
   }
 
+  if (config.regexSortPatterns) {
+    if (!config.apiKey) {
+      return createResponse(
+        false,
+        'missingApiKey',
+        'Regex sorting requires an API key to be set'
+      );
+    }
+
+    // Split the pattern by spaces and validate each one
+    const patterns = config.regexSortPatterns.split(/\s+/).filter(Boolean);
+    // Enforce an upper bound on the number of patterns
+    if (patterns.length > Settings.MAX_REGEX_SORT_PATTERNS) {
+      return createResponse(
+        false,
+        'tooManyRegexSortPatterns',
+        `You can specify at most ${Settings.MAX_REGEX_SORT_PATTERNS} regex sort patterns`
+      );
+    }
+
+    for (const pattern of patterns) {
+      const delimiter = '<::>';
+      const delimiterIndex = pattern.indexOf(delimiter);
+      let name: string = 'Unamed';
+      let regexPattern = pattern;
+      if (delimiterIndex !== -1) {
+        name = pattern.slice(0, delimiterIndex).replace(/_/g, ' ');
+        regexPattern = pattern.slice(delimiterIndex + delimiter.length);
+      }
+      try {
+        new RegExp(regexPattern);
+      } catch (e) {
+        return createResponse(
+          false,
+          'invalidRegexSortPattern',
+          `Invalid regex sort pattern: ${name ? `"${name}" ` : ''}${regexPattern}`
+        );
+      }
+    }
+  }
   return createResponse(true, null, null);
 }
